@@ -1,0 +1,17 @@
+{
+  "name": "Calculator",
+  "short_name": "Calc",
+  "description": "An installable calculator app with offline support.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#101826",
+  "theme_color": "#101826",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

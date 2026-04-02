@@ -1,0 +1,175 @@
+:root {
+  color-scheme: dark;
+  --bg-start: #0b1320;
+  --bg-end: #172033;
+  --panel: rgba(9, 15, 25, 0.78);
+  --panel-edge: rgba(255, 255, 255, 0.08);
+  --display-bg: rgba(255, 255, 255, 0.04);
+  --key-bg: rgba(255, 255, 255, 0.08);
+  --key-strong: #ff9f43;
+  --key-strong-shadow: rgba(255, 159, 67, 0.35);
+  --key-muted: rgba(113, 128, 150, 0.28);
+  --text-main: #f4f7fb;
+  --text-soft: #9fb0c7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font-family: "Space Grotesk", sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(76, 140, 255, 0.26), transparent 32%),
+    linear-gradient(160deg, var(--bg-start), var(--bg-end));
+  color: var(--text-main);
+}
+
+.app-shell {
+  width: min(100%, 420px);
+}
+
+.calculator {
+  padding: 24px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 28px;
+  background: var(--panel);
+  backdrop-filter: blur(20px);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.app-kicker {
+  margin: 0 0 4px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.install-button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 700;
+  color: #1f1408;
+  background: linear-gradient(135deg, #ffd087, #ff9f43);
+  box-shadow: 0 12px 24px rgba(255, 159, 67, 0.25);
+  cursor: pointer;
+}
+
+.display-panel {
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 22px;
+  background: var(--display-bg);
+}
+
+.display-label {
+  margin: 0 0 12px;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.display {
+  width: 100%;
+  display: block;
+  min-height: 64px;
+  overflow-wrap: anywhere;
+  font-size: clamp(2.4rem, 7vw, 3.8rem);
+  font-weight: 700;
+  text-align: right;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.key {
+  appearance: none;
+  border: 0;
+  border-radius: 18px;
+  min-height: 72px;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--text-main);
+  background: var(--key-bg);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
+}
+
+.key:hover,
+.key:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+  outline: none;
+}
+
+.key:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.key--muted {
+  background: var(--key-muted);
+}
+
+.key--accent,
+.key--equals {
+  background: var(--key-strong);
+  color: #1f1408;
+  box-shadow: 0 10px 24px var(--key-strong-shadow);
+}
+
+.key--wide {
+  grid-column: span 2;
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 14px;
+  }
+
+  .calculator {
+    padding: 16px;
+    border-radius: 24px;
+  }
+
+  .app-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .key {
+    min-height: 64px;
+  }
+}
