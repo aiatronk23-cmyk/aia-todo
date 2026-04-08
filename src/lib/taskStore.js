@@ -80,6 +80,7 @@ const normalizeTask = (task) => ({
   id: String(task.id),
   text: task.text,
   completed: Boolean(task.completed),
+  focused: Boolean(task.focused || task.focus_now),
   dueDate: task.dueDate || "",
   labels: parseLabels(task.labels || task.label).length
     ? parseLabels(task.labels || task.label)
@@ -187,6 +188,7 @@ const mergeDuplicateTasks = (tasks) => {
     existingTask.keep = normalizeTask({
       ...currentKeep,
       completed: currentKeep.completed || task.completed,
+      focused: currentKeep.focused || task.focused,
       labels: mergedLabels,
       dueDate: nextDueDate,
       importance: nextImportance,
@@ -272,6 +274,7 @@ export const removeDuplicateTasks = async (tasks = null) => {
           .update({
             text: keep.text,
             completed: keep.completed,
+            focus_now: keep.focused,
             due_date: keep.dueDate || null,
             label: serializeLabels(keep.labels),
             importance: keep.importance,
@@ -314,7 +317,7 @@ export const loadTasks = async () => {
     const data = await executeWithRetry(async () => {
       const { data: tasks, error } = await supabase
         .from("tasks")
-        .select("id, text, completed, due_date, label, importance, created_at")
+        .select("id, text, completed, focus_now, due_date, label, importance, created_at")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -374,6 +377,7 @@ export const seedTasks = async (tasks) => {
       const payload = tasks.map((task) => ({
         text: task.text,
         completed: task.completed,
+        focus_now: Boolean(task.focused),
         due_date: task.dueDate || null,
         label: serializeLabels(task.labels || task.label),
         importance: task.importance,
@@ -445,6 +449,7 @@ export const ensureTasks = async (tasks) => {
       const payload = missingTasks.map((task) => ({
         text: task.text,
         completed: task.completed,
+        focus_now: Boolean(task.focused),
         due_date: task.dueDate || null,
         label: serializeLabels(task.labels || task.label),
         importance: task.importance,
@@ -503,11 +508,12 @@ export const createTask = async (task) => {
         .insert({
           text: newTask.text,
           completed: newTask.completed,
+          focus_now: newTask.focused,
           due_date: newTask.dueDate || null,
           label: serializeLabels(newTask.labels || newTask.label),
           importance: newTask.importance,
         })
-        .select("id, text, completed, due_date, label, importance, created_at")
+        .select("id, text, completed, focus_now, due_date, label, importance, created_at")
         .single();
 
       if (error) {
@@ -580,6 +586,38 @@ export const deleteTaskById = async (id) => {
   }
 };
 
+export const setTaskFocusById = async (id, focused) => {
+  if (!supabase) {
+    return localUpdateTaskById(id, { focused });
+  }
+
+  try {
+    const updatedTask = await executeWithRetry(async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .update({ focus_now: focused })
+        .eq("id", id)
+        .select("id, text, completed, focus_now, due_date, label, importance, created_at")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return normalizeCloudTask(data);
+    });
+
+    localUpdateTaskById(id, updatedTask);
+    return updatedTask;
+  } catch (error) {
+    if (shouldStayLocalOnly()) {
+      return localUpdateTaskById(id, { focused });
+    }
+
+    throw error;
+  }
+};
+
 export const updateTaskById = async (id, updates) => {
   const normalizedUpdates = normalizeTask({ id, ...updates });
 
@@ -594,12 +632,13 @@ export const updateTaskById = async (id, updates) => {
         .update({
           text: normalizedUpdates.text,
           completed: normalizedUpdates.completed,
+          focus_now: normalizedUpdates.focused,
           due_date: normalizedUpdates.dueDate || null,
           label: serializeLabels(normalizedUpdates.labels || normalizedUpdates.label),
           importance: normalizedUpdates.importance,
         })
         .eq("id", id)
-        .select("id, text, completed, due_date, label, importance, created_at")
+        .select("id, text, completed, focus_now, due_date, label, importance, created_at")
         .single();
 
       if (error) {
@@ -619,3 +658,5 @@ export const updateTaskById = async (id, updates) => {
     throw error;
   }
 };
+
+export const isCloudSyncConfigured = () => hasSupabaseConfig;

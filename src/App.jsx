@@ -11,8 +11,10 @@ import {
   createTask,
   deleteTaskById,
   getStoreModeLabel,
+  isCloudSyncConfigured,
   loadTasks,
   removeDuplicateTasks,
+  setTaskFocusById,
   toggleTaskById,
   updateTaskById,
 } from "./lib/taskStore";
@@ -25,6 +27,7 @@ const DEFAULT_ADD_MODE = "manual";
 const DEFAULT_FILTER_MODE = "manual";
 const DEFAULT_PAGE = "home";
 const FOCUS_STORAGE_KEY = "minimal-todo-focus-task-ids";
+const CLOUD_REFRESH_INTERVAL_MS = 15000;
 
 const starterTasks = [
   {
@@ -611,7 +614,7 @@ const getSuggestedFocusTasks = (tasks, selectedTaskIds) => {
     .slice(0, 5);
 };
 
-const isTaskFocused = (taskId, focusTaskIds) => focusTaskIds.includes(taskId);
+const isTaskFocused = (task) => Boolean(task.focused);
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -649,14 +652,6 @@ export default function App() {
   const [editingTaskId, setEditingTaskId] = useState("");
   const [openMenuTaskId, setOpenMenuTaskId] = useState("");
   const [activePage, setActivePage] = useState(DEFAULT_PAGE);
-  const [focusTaskIds, setFocusTaskIds] = useState(() => {
-    try {
-      const rawValue = window.localStorage.getItem(FOCUS_STORAGE_KEY);
-      return rawValue ? JSON.parse(rawValue) : [];
-    } catch {
-      return [];
-    }
-  });
   const [editDraft, setEditDraft] = useState({
     text: "",
     labels: "",
@@ -689,10 +684,6 @@ export default function App() {
   }, [openMenuTaskId]);
 
   useEffect(() => {
-    window.localStorage.setItem(FOCUS_STORAGE_KEY, JSON.stringify(focusTaskIds));
-  }, [focusTaskIds]);
-
-  useEffect(() => {
     let isMounted = true;
 
     const fetchTasks = async () => {
@@ -703,11 +694,27 @@ export default function App() {
         let nextTasks = await loadTasks();
         nextTasks = await removeDuplicateTasks(nextTasks);
 
+        try {
+          const rawFocusIds = window.localStorage.getItem(FOCUS_STORAGE_KEY);
+          const legacyFocusIds = rawFocusIds ? JSON.parse(rawFocusIds) : [];
+          const idsToMigrate = legacyFocusIds.filter((taskId) =>
+            nextTasks.some((task) => task.id === taskId && !task.focused),
+          );
+
+          if (idsToMigrate.length > 0) {
+            await Promise.all(idsToMigrate.map((taskId) => setTaskFocusById(taskId, true)));
+            nextTasks = await removeDuplicateTasks(await loadTasks());
+          }
+
+          if (legacyFocusIds.length > 0) {
+            window.localStorage.removeItem(FOCUS_STORAGE_KEY);
+          }
+        } catch {
+          window.localStorage.removeItem(FOCUS_STORAGE_KEY);
+        }
+
         if (isMounted) {
           setTasks(nextTasks);
-          setFocusTaskIds((currentValue) =>
-            currentValue.filter((taskId) => nextTasks.some((task) => task.id === taskId)),
-          );
           setSyncMode(getStoreModeLabel());
         }
       } catch {
@@ -728,6 +735,54 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isCloudSyncConfigured()) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const refreshTasks = async () => {
+      if (isCancelled || editingTaskId) {
+        return;
+      }
+
+      try {
+        const nextTasks = await removeDuplicateTasks(await loadTasks());
+
+        if (!isCancelled) {
+          setTasks(nextTasks);
+          setSyncMode(getStoreModeLabel());
+        }
+      } catch {
+        if (!isCancelled) {
+          setSyncMode(getStoreModeLabel());
+        }
+      }
+    };
+
+    const handleWindowFocus = () => {
+      refreshTasks();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshTasks();
+      }
+    };
+
+    const intervalId = window.setInterval(refreshTasks, CLOUD_REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [editingTaskId]);
 
   const handleCalendarSync = async (event) => {
     event.preventDefault();
@@ -778,6 +833,7 @@ export default function App() {
       const createdTask = await createTask({
         text,
         completed: false,
+        focused: false,
         dueDate,
         labels: parseInputLabels(nextLabel).length
           ? parseInputLabels(nextLabel)
@@ -833,6 +889,7 @@ export default function App() {
       const createdTask = await createTask({
         text: payload.text,
         completed: payload.completed,
+        focused: false,
         dueDate: payload.dueDate,
         labels: [payload.label || "General"],
         importance: payload.importance || DEFAULT_IMPORTANCE,
@@ -930,7 +987,6 @@ export default function App() {
     const previousTasks = tasks;
 
     setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id));
-    setFocusTaskIds((currentValue) => currentValue.filter((taskId) => taskId !== id));
     setErrorMessage("");
 
     try {
@@ -943,16 +999,42 @@ export default function App() {
     }
   };
 
-  const handleAddToFocusNow = (id) => {
-    setFocusTaskIds((currentValue) =>
-      currentValue.includes(id) ? currentValue : [...currentValue, id],
+  const handleAddToFocusNow = async (id) => {
+    const previousTasks = tasks;
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) => (task.id === id ? { ...task, focused: true } : task)),
     );
     setOpenMenuTaskId("");
+    setErrorMessage("");
+
+    try {
+      await setTaskFocusById(id, true);
+      setSyncMode(getStoreModeLabel());
+    } catch {
+      setTasks(previousTasks);
+      setErrorMessage("Could not update Focus Now.");
+      setSyncMode(getStoreModeLabel());
+    }
   };
 
-  const handleRemoveFromFocusNow = (id) => {
-    setFocusTaskIds((currentValue) => currentValue.filter((taskId) => taskId !== id));
+  const handleRemoveFromFocusNow = async (id) => {
+    const previousTasks = tasks;
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) => (task.id === id ? { ...task, focused: false } : task)),
+    );
     setOpenMenuTaskId("");
+    setErrorMessage("");
+
+    try {
+      await setTaskFocusById(id, false);
+      setSyncMode(getStoreModeLabel());
+    } catch {
+      setTasks(previousTasks);
+      setErrorMessage("Could not update Focus Now.");
+      setSyncMode(getStoreModeLabel());
+    }
   };
 
   const handleStartEditing = (task) => {
@@ -994,6 +1076,7 @@ export default function App() {
         dueDate: editDraft.dueDate,
         importance: editDraft.importance,
         completed: tasks.find((task) => task.id === id)?.completed ?? false,
+        focused: tasks.find((task) => task.id === id)?.focused ?? false,
       });
 
       setTasks((currentTasks) =>
@@ -1047,10 +1130,11 @@ export default function App() {
       task.dueDate >= getTodayKey() &&
       task.dueDate <= getEndOfMonthKey(),
   );
-  const focusTasks = focusTaskIds
-    .map((taskId) => tasks.find((task) => task.id === taskId))
-    .filter(Boolean);
-  const suggestedFocusTasks = getSuggestedFocusTasks(tasks, focusTaskIds);
+  const focusTasks = tasks.filter((task) => task.focused);
+  const suggestedFocusTasks = getSuggestedFocusTasks(
+    tasks,
+    tasks.filter((task) => task.focused).map((task) => task.id),
+  );
   const homeDueTasks =
     homeDueScope === "today"
       ? dueTodayTasks
@@ -1273,7 +1357,7 @@ export default function App() {
                             {task.text}
                           </span>
                           <span className="task-meta">
-                            {isTaskFocused(task.id, focusTaskIds) ? (
+                            {isTaskFocused(task) ? (
                               <span className="task-focus-badge">Focus Now</span>
                             ) : null}
                             {(task.labels || [task.label]).map((taskLabel) => (
@@ -1294,12 +1378,12 @@ export default function App() {
                         className="secondary-button focus-inline-action"
                         type="button"
                         onClick={() =>
-                          isTaskFocused(task.id, focusTaskIds)
+                          isTaskFocused(task)
                             ? handleRemoveFromFocusNow(task.id)
                             : handleAddToFocusNow(task.id)
                         }
                       >
-                        {isTaskFocused(task.id, focusTaskIds)
+                        {isTaskFocused(task)
                           ? "Remove from Focus Now"
                           : "Add to Focus Now"}
                       </button>
@@ -1776,7 +1860,7 @@ export default function App() {
                           {task.text}
                         </span>
                         <span className="task-meta">
-                          {isTaskFocused(task.id, focusTaskIds) ? (
+                          {isTaskFocused(task) ? (
                             <span className="task-focus-badge">Focus Now</span>
                           ) : null}
                           {(task.labels || [task.label]).map((taskLabel) => (
@@ -1817,7 +1901,7 @@ export default function App() {
                       </button>
                       {openMenuTaskId === task.id ? (
                         <div className="task-menu-popover" role="menu">
-                          {isTaskFocused(task.id, focusTaskIds) ? (
+                          {isTaskFocused(task) ? (
                             <button
                               className="task-menu-item"
                               type="button"
