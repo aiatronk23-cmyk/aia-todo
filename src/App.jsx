@@ -611,6 +611,8 @@ const getSuggestedFocusTasks = (tasks, selectedTaskIds) => {
     .slice(0, 5);
 };
 
+const isTaskFocused = (taskId, focusTaskIds) => focusTaskIds.includes(taskId);
+
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [draft, setDraft] = useState("");
@@ -1136,6 +1138,7 @@ export default function App() {
                                 {task.text}
                               </span>
                               <span className="task-meta">
+                                <span className="task-focus-badge">Focus Now</span>
                                 {(task.labels || [task.label]).map((taskLabel) => (
                                   <span className="task-label" key={`focus-label-${task.id}-${taskLabel}`}>
                                     {taskLabel}
@@ -1270,6 +1273,9 @@ export default function App() {
                             {task.text}
                           </span>
                           <span className="task-meta">
+                            {isTaskFocused(task.id, focusTaskIds) ? (
+                              <span className="task-focus-badge">Focus Now</span>
+                            ) : null}
                             {(task.labels || [task.label]).map((taskLabel) => (
                               <span className="task-label" key={`due-today-label-${task.id}-${taskLabel}`}>
                                 {taskLabel}
@@ -1284,6 +1290,19 @@ export default function App() {
                           </span>
                         </span>
                       </label>
+                      <button
+                        className="secondary-button focus-inline-action"
+                        type="button"
+                        onClick={() =>
+                          isTaskFocused(task.id, focusTaskIds)
+                            ? handleRemoveFromFocusNow(task.id)
+                            : handleAddToFocusNow(task.id)
+                        }
+                      >
+                        {isTaskFocused(task.id, focusTaskIds)
+                          ? "Remove from Focus Now"
+                          : "Add to Focus Now"}
+                      </button>
                     </li>
                   ))
                 ) : (
@@ -1757,6 +1776,9 @@ export default function App() {
                           {task.text}
                         </span>
                         <span className="task-meta">
+                          {isTaskFocused(task.id, focusTaskIds) ? (
+                            <span className="task-focus-badge">Focus Now</span>
+                          ) : null}
                           {(task.labels || [task.label]).map((taskLabel) => (
                             <span className="task-label" key={`${task.id}-${taskLabel}`}>
                               {taskLabel}
@@ -1795,7 +1817,7 @@ export default function App() {
                       </button>
                       {openMenuTaskId === task.id ? (
                         <div className="task-menu-popover" role="menu">
-                          {focusTaskIds.includes(task.id) ? (
+                          {isTaskFocused(task.id, focusTaskIds) ? (
                             <button
                               className="task-menu-item"
                               type="button"

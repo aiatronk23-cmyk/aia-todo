@@ -768,6 +768,17 @@ textarea {
   font-weight: 700;
 }
 
+.task-focus-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .task-importance {
   display: inline-flex;
   align-items: center;
@@ -802,6 +813,11 @@ textarea {
   color: #9f1239;
   background: #fff1f2;
   flex-shrink: 0;
+}
+
+.focus-inline-action {
+  width: fit-content;
+  margin-top: 10px;
 }
 
 .empty-state {
@@ -945,12 +961,22 @@ textarea {
   }
 
   .task-menu-popover {
-    left: 0;
-    right: 0;
+    position: static;
+    left: auto;
+    right: auto;
+    width: 100%;
+    min-width: 0;
+    margin-top: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
   }
 
   .secondary-button,
   .delete-button {
+    width: 100%;
+  }
+
+  .focus-inline-action {
     width: 100%;
   }
 }
