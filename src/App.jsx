@@ -15,6 +15,7 @@ import {
   loadTasks,
   removeDuplicateTasks,
   setTaskFocusById,
+  subscribeToTaskChanges,
   toggleTaskById,
   updateTaskById,
 } from "./lib/taskStore";
@@ -749,7 +750,7 @@ export default function App() {
       }
 
       try {
-        const nextTasks = await removeDuplicateTasks(await loadTasks());
+        const nextTasks = await loadTasks();
 
         if (!isCancelled) {
           setTasks(nextTasks);
@@ -773,12 +774,14 @@ export default function App() {
     };
 
     const intervalId = window.setInterval(refreshTasks, CLOUD_REFRESH_INTERVAL_MS);
+    const unsubscribeFromTaskChanges = subscribeToTaskChanges(refreshTasks);
     window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isCancelled = true;
       window.clearInterval(intervalId);
+      unsubscribeFromTaskChanges();
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };

@@ -660,3 +660,28 @@ export const updateTaskById = async (id, updates) => {
 };
 
 export const isCloudSyncConfigured = () => hasSupabaseConfig;
+
+export const subscribeToTaskChanges = (onChange) => {
+  if (!supabase || shouldStayLocalOnly()) {
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel("tasks-sync")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "tasks",
+      },
+      () => {
+        onChange();
+      },
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+};
