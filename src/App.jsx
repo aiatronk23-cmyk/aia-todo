@@ -650,6 +650,9 @@ export default function App() {
   const [aiFilterPrompt, setAiFilterPrompt] = useState("");
   const [aiFilterMessage, setAiFilterMessage] = useState("");
   const [isAiFilterLoading, setIsAiFilterLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [isAiSuggestionsLoading, setIsAiSuggestionsLoading] = useState(false);
+  const [aiSuggestionsError, setAiSuggestionsError] = useState("");
   const [editingTaskId, setEditingTaskId] = useState("");
   const [openMenuTaskId, setOpenMenuTaskId] = useState("");
   const [activePage, setActivePage] = useState(DEFAULT_PAGE);
@@ -953,6 +956,38 @@ export default function App() {
       );
     } finally {
       setIsAiFilterLoading(false);
+    }
+  };
+
+  const handleAiSuggestionsRequest = async () => {
+    setIsAiSuggestionsLoading(true);
+    setAiSuggestionsError("");
+
+    const candidateTasks = tasks
+      .filter((task) => !task.completed)
+      .filter((task) => !tasks.filter((t) => t.focused).some((ft) => ft.id === task.id))
+      .map(({ id, text, dueDate, importance, labels }) => ({ id, text, dueDate, importance, labels }));
+
+    try {
+      const response = await fetch("/api/ai/suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tasks: candidateTasks, today: getTodayKey() }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.message || "AI suggestions failed.");
+      }
+
+      setAiSuggestions(payload.suggestions || []);
+    } catch (error) {
+      setAiSuggestionsError(
+        error instanceof Error ? error.message : "Could not get AI suggestions.",
+      );
+    } finally {
+      setIsAiSuggestionsLoading(false);
     }
   };
 
@@ -1272,33 +1307,64 @@ export default function App() {
                       <div className="focus-column-header">
                         <strong>Suggestions</strong>
                         <span>Due soon or high importance</span>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={isAiSuggestionsLoading}
+                          onClick={() => {
+                            setAiSuggestions([]);
+                            handleAiSuggestionsRequest();
+                          }}
+                        >
+                          {isAiSuggestionsLoading ? "Thinking…" : "Ask AI"}
+                        </button>
                       </div>
+                      {aiSuggestionsError ? (
+                        <p className="error-message">{aiSuggestionsError}</p>
+                      ) : null}
                       <ul className="focus-list">
-                        {suggestedFocusTasks.length > 0 ? (
-                          suggestedFocusTasks.map((task) => (
-                            <li
-                              className={`focus-item ${
-                                task.importance === "High" ? "focus-item--important" : "focus-item--urgent"
-                              }`}
-                              key={`suggested-${task.id}`}
-                            >
-                              <span className="focus-kind">Suggested</span>
-                              <strong>{task.text}</strong>
-                              <span>
-                                {task.dueDate ? `Due ${formatDueDate(task.dueDate)}` : "No due date"}
-                              </span>
-                              <button
-                                className="secondary-button"
-                                type="button"
-                                onClick={() => handleAddToFocusNow(task.id)}
+                        {(() => {
+                          const displayTasks = aiSuggestions.length > 0
+                            ? aiSuggestions
+                                .map(({ id, reason }) => ({
+                                  task: suggestedFocusTasks.find((t) => t.id === id) ||
+                                    tasks.find((t) => t.id === id && !t.completed && !t.focused),
+                                  reason,
+                                }))
+                                .filter(({ task }) => Boolean(task))
+                            : suggestedFocusTasks.map((task) => ({ task, reason: null }));
+
+                          return displayTasks.length > 0 ? (
+                            displayTasks.map(({ task, reason }) => (
+                              <li
+                                className={`focus-item ${
+                                  task.importance === "High" ? "focus-item--important" : "focus-item--urgent"
+                                }`}
+                                key={`suggested-${task.id}`}
                               >
-                                Add to Focus Now
-                              </button>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="empty-state">No extra suggestions right now.</li>
-                        )}
+                                <span className="focus-kind">
+                                  {aiSuggestions.length > 0 ? "AI Pick" : "Suggested"}
+                                </span>
+                                <strong>{task.text}</strong>
+                                <span>
+                                  {task.dueDate ? `Due ${formatDueDate(task.dueDate)}` : "No due date"}
+                                </span>
+                                {reason ? (
+                                  <span className="focus-ai-reason">{reason}</span>
+                                ) : null}
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  onClick={() => handleAddToFocusNow(task.id)}
+                                >
+                                  Add to Focus Now
+                                </button>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="empty-state">No extra suggestions right now.</li>
+                          );
+                        })()}
                       </ul>
                     </div>
                   ) : null}

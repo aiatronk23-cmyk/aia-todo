@@ -139,6 +139,56 @@ app.post("/api/ai/filter", async (request, response) => {
   }
 });
 
+app.post("/api/ai/suggestions", async (request, response) => {
+  if (!ensureClient(response)) {
+    return;
+  }
+
+  const { tasks = [], today = "" } = request.body ?? {};
+
+  try {
+    const result = await parseStructuredResponse(
+      "focus_suggestions",
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          suggestions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                reason: { type: "string" },
+              },
+              required: ["id", "reason"],
+            },
+          },
+        },
+        required: ["suggestions"],
+      },
+      [
+        "You are a productivity assistant helping a user decide what to focus on right now.",
+        "Given a list of incomplete tasks, pick up to 5 that the user should focus on today.",
+        "Consider urgency (overdue or due soon), importance level, and task relevance.",
+        "For each chosen task, provide a concise one-sentence reason (max 12 words) explaining why it deserves focus.",
+        "Return only the task id and reason for each suggestion.",
+        "Today's date is provided — use it to determine urgency.",
+      ].join(" "),
+      { tasks, today },
+    );
+
+    response.json(result);
+  } catch (error) {
+    response.status(500).json({
+      error: "ai_suggestions_failed",
+      message: "The AI could not generate suggestions.",
+      details: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`AI API server listening on http://localhost:${port}`);
 });

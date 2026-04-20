@@ -507,6 +507,12 @@ textarea {
   font-weight: 700;
 }
 
+.focus-ai-reason {
+  font-size: 0.8rem;
+  color: #6366f1;
+  font-style: italic;
+}
+
 .focus-item--urgent {
   border-color: #fecaca;
   background: #fff7f7;
